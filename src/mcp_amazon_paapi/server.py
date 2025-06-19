@@ -80,7 +80,6 @@ def search_items(search_term: str, category: Optional[str] = None, item_count: O
 
 def main():
     logging.error(f"Starting Amazon PA-API MCP server for partner tag {os.getenv('PAAPI_PARTNER_TAG')}...")
-    print('--------------------------------', file=sys.stderr)
     mcp.run()
 
 if __name__ == "__main__":
