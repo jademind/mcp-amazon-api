@@ -6,21 +6,40 @@ from typing import Optional, List, Protocol
 from dataclasses import dataclass
 
 from mcp_amazon_paapi._vendor.paapi5_python_sdk.api.default_api import DefaultApi
-from mcp_amazon_paapi._vendor.paapi5_python_sdk.models import PartnerType, SearchItemsResource, SearchItemsRequest, SearchItemsResponse
+from mcp_amazon_paapi._vendor.paapi5_python_sdk.models import PartnerType, SearchItemsResource, SearchItemsRequest, SearchItemsResponse, GetItemsRequest, GetItemsResponse
+from mcp_amazon_paapi._vendor.paapi5_python_sdk.models.item import Item as ItemResponse
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class SearchItem:
+class ItemImage:
     """
-    A class representing an item at the Amazon marketplace with the following fields:
+    Represents an image of an item at the Amazon marketplace.
+    
+    Args:
+    - url: The URL of the image.
+    - height: The height of the image in pixels.
+    - width: The width of the image in pixels.
+    """
+    url: str
+    height: int
+    width: int
+
+
+@dataclass
+class Item:
+    """
+    Represents an item at the Amazon marketplace.
+    
+    Args:
     - asin: The Amazon Standard Identification Number of the item.
     - title: The title of the item.
     - detail_page_url: The URL of the detail page of the item.
     - bying_price: The price of the item if available.
     - audience_rating: The audience rating of the item if available.
     - is_adult_product: Whether the item is an adult product if available.
+    - image: The primary image of the item if available.
     """
     asin: str
     title: Optional[str] = None
@@ -28,6 +47,7 @@ class SearchItem:
     bying_price: Optional[float] = None
     audience_rating: Optional[str] = None
     is_adult_product: Optional[bool] = None
+    image: Optional[ItemImage] = None
 
 
 class SearchSort(StrEnum):
@@ -47,6 +67,9 @@ class PAAPIClientProtocol(Protocol):
     def search_items(self, request: SearchItemsRequest) -> SearchItemsResponse:
         ...
 
+    def get_items(self, request: GetItemsRequest) -> GetItemsResponse:
+        ...
+
 
 @dataclass
 class PAAPIClientConfig:
@@ -62,6 +85,14 @@ class PAAPIClientConfig:
 
 class AmazonPAAPIService:
     """Service class for managing Amazon PA-API client and operations"""
+
+    ITEM_RESOURCES : List[SearchItemsResource] = [
+        SearchItemsResource.ITEMINFO_TITLE,
+        SearchItemsResource.ITEMINFO_CONTENTRATING,
+        SearchItemsResource.ITEMINFO_PRODUCTINFO,
+        SearchItemsResource.OFFERS_LISTINGS_PRICE,
+        SearchItemsResource.IMAGES_PRIMARY_LARGE,
+    ]
     
     def __init__(self, client: Optional[PAAPIClientProtocol] = None, config: Optional[PAAPIClientConfig] = None):
         """
@@ -114,7 +145,40 @@ class AmazonPAAPIService:
             region=region,
         )
     
-    def search_items(self, search_term: str, category: Optional[str] = None, item_count: Optional[int] = 10, sort_by: Optional[SearchSort] = None) -> List[SearchItem]:
+    def _map_item_response(self, item: ItemResponse) -> Item:
+        """
+        Map the item response to the Item class.
+        """
+        asin = item.asin
+
+        title = ""
+        if item.item_info and item.item_info.title:
+            title = item.item_info.title.display_value
+
+        detail_page_url = ""
+        if item.detail_page_url:
+            detail_page_url = item.detail_page_url
+
+        bying_price = None
+        if item.offers and item.offers.listings and item.offers.listings[0] and item.offers.listings[0].price:
+            bying_price = item.offers.listings[0].price.amount
+        
+        audience_rating = ""
+        if item.item_info and item.item_info.content_rating and item.item_info.content_rating.audience_rating:
+            audience_rating = item.item_info.content_rating.audience_rating.display_value
+
+        is_adult_product = False
+        if item.item_info and item.item_info.product_info and item.item_info.product_info.is_adult_product:
+            is_adult_product = item.item_info.product_info.is_adult_product.display_value
+
+        image = None
+        if item.images and item.images.primary and item.images.primary.large:
+            primary_img = item.images.primary.large
+            image = ItemImage(url=primary_img.url, height=primary_img.height, width=primary_img.width)
+
+        return Item(asin, title, detail_page_url, bying_price, audience_rating, is_adult_product, image)
+    
+    def search_items(self, search_term: str, category: Optional[str] = None, item_count: Optional[int] = 10, sort_by: Optional[SearchSort] = None) -> List[Item]:
         """
         Search for items using the Amazon PA-API 5.0
         (https://webservices.amazon.com/paapi5/documentation/)
@@ -126,21 +190,14 @@ class AmazonPAAPIService:
             sort_by (Optional[SearchSort]): Sort order of the search results.
 
         Returns:
-            List[SearchItem]: Items that match the search criteria.
+            List[Item]: Items that match the search criteria.
         """
-        search_items_resources = [
-            SearchItemsResource.ITEMINFO_TITLE,
-            SearchItemsResource.ITEMINFO_CONTENTRATING,
-            SearchItemsResource.ITEMINFO_PRODUCTINFO,
-            SearchItemsResource.OFFERS_LISTINGS_PRICE,
-        ]
-
         search_items_request = SearchItemsRequest(
             partner_tag=self.config.partner_tag,
             partner_type=self.config.partner_type,
             keywords=search_term,
             item_count=item_count,
-            resources=search_items_resources,
+            resources=self.ITEM_RESOURCES,
             marketplace=self.config.marketplace,
         )
 
@@ -162,30 +219,37 @@ class AmazonPAAPIService:
             return []
 
         logger.info(f"Search found {len(response.search_result.items)} items")
-        items = []
-        for item in response.search_result.items:
-            asin = item.asin
-
-            title = ""
-            if item.item_info and item.item_info.title:
-                title = item.item_info.title.display_value
-
-            detail_page_url = ""
-            if item.detail_page_url:
-                detail_page_url = item.detail_page_url
-
-            bying_price = None
-            if item.offers and item.offers.listings and item.offers.listings[0] and item.offers.listings[0].price:
-                bying_price = item.offers.listings[0].price.amount
-            
-            audience_rating = ""
-            if item.item_info and item.item_info.content_rating and item.item_info.content_rating.audience_rating:
-                audience_rating = item.item_info.content_rating.audience_rating.display_value
-
-            is_adult_product = False
-            if item.item_info and item.item_info.product_info and item.item_info.product_info.is_adult_product:
-                is_adult_product = item.item_info.product_info.is_adult_product.display_value
-
-            items.append(SearchItem(asin, title, detail_page_url, bying_price, audience_rating, is_adult_product))
         
-        return items
+        return [self._map_item_response(item) for item in response.search_result.items]
+
+    def get_item(self, asin: str) -> Optional[Item]:
+        """
+        Get a specific item by its ASIN using the Amazon PA-API 5.0
+        (https://webservices.amazon.com/paapi5/documentation/)
+
+        Args:
+            asin (str): The ASIN of the item to get.
+
+        Returns:
+            Optional[Item]: The item with the given ASIN if found, otherwise None.
+        """
+        get_items_request = GetItemsRequest(
+            partner_tag=self.config.partner_tag,
+            partner_type=self.config.partner_type,
+            item_ids=[asin],
+            resources=self.ITEM_RESOURCES,
+            marketplace=self.config.marketplace,
+        )
+
+        logger.info(f"Getting item with request: {get_items_request}")
+        response = self.client.get_items(get_items_request)
+
+        if response.errors:
+            logger.error(f"Get item failed with errors: {response.errors}")
+            return None
+
+        if not response.items_result or not response.items_result.items:
+            logger.warning("Get item found no items")
+            return None
+        
+        return self._map_item_response(response.items_result.items[0])

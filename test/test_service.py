@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from mcp_amazon_paapi.service import AmazonPAAPIService, SearchItem, PAAPIClientConfig, PAAPIClientProtocol
+from mcp_amazon_paapi.service import AmazonPAAPIService, Item, PAAPIClientConfig, PAAPIClientProtocol, ItemImage
 from mcp_amazon_paapi._vendor.paapi5_python_sdk.models import SearchItemsResponse, PartnerType
 
 
@@ -69,8 +69,8 @@ class TestAmazonPAAPIService:
         assert config.marketplace == "www.amazon.de"
         assert config.partner_type == PartnerType.ASSOCIATES
 
-    def test_search_items_success(self):
-        """Test successful search_items call"""
+    def test_search_items_success_with_image(self):
+        """Test successful search_items call including image data"""
         # Setup mock response
         mock_item = Mock()
         mock_item.asin = "B123456789"
@@ -85,6 +85,19 @@ class TestAmazonPAAPIService:
         mock_item_info.product_info = None
         mock_item.item_info = mock_item_info
         mock_item.offers = None
+
+        # Mock image data
+        mock_large_image = Mock()
+        mock_large_image.url = "https://example.com/image.jpg"
+        mock_large_image.height = 500
+        mock_large_image.width = 400
+
+        mock_primary = Mock()
+        mock_primary.large = mock_large_image
+
+        mock_images = Mock()
+        mock_images.primary = mock_primary
+        mock_item.images = mock_images
 
         # Mock search result
         mock_search_result = Mock()
@@ -110,9 +123,14 @@ class TestAmazonPAAPIService:
 
         # Verify
         assert len(result) == 1
-        assert result[0].asin == "B123456789"
-        assert result[0].title == "Test Product"
-        assert result[0].detail_page_url == "https://amazon.de/test"
+        item = result[0]
+        assert item.asin == "B123456789"
+        assert item.title == "Test Product"
+        assert item.detail_page_url == "https://amazon.de/test"
+        assert item.image is not None
+        assert item.image.url == "https://example.com/image.jpg"
+        assert item.image.height == 500
+        assert item.image.width == 400
         mock_client.search_items.assert_called_once()
 
     def test_search_items_with_category(self):
@@ -179,14 +197,21 @@ class TestAmazonPAAPIService:
         mock_client.search_items.assert_called_once()
 
     def test_search_item_dataclass(self):
-        """Test SearchItem dataclass creation"""
-        item = SearchItem(
+        """Test Item dataclass creation with image"""
+        image = ItemImage(
+            url="https://example.com/test.jpg",
+            height=800,
+            width=600
+        )
+        
+        item = Item(
             asin="B123456789",
             title="Test Title",
             detail_page_url="https://test.com",
             bying_price=19.99,
             audience_rating="PG-13",
-            is_adult_product=False
+            is_adult_product=False,
+            image=image
         )
         
         assert item.asin == "B123456789"
@@ -195,14 +220,157 @@ class TestAmazonPAAPIService:
         assert item.bying_price == 19.99
         assert item.audience_rating == "PG-13"
         assert item.is_adult_product is False
+        assert item.image == image
+        assert item.image.url == "https://example.com/test.jpg"
+        assert item.image.height == 800
+        assert item.image.width == 600
 
     def test_search_item_defaults(self):
-        """Test SearchItem with default values"""
-        item = SearchItem(asin="B123456789")
+        """Test Item with default values"""
+        item = Item(asin="B123456789")
         
         assert item.asin == "B123456789"
         assert item.title is None
         assert item.detail_page_url is None
         assert item.bying_price is None
         assert item.audience_rating is None
-        assert item.is_adult_product is None 
+        assert item.is_adult_product is None
+        assert item.image is None
+
+    def test_item_image_dataclass(self):
+        """Test ItemImage dataclass creation"""
+        image = ItemImage(
+            url="https://example.com/image.jpg",
+            height=1024,
+            width=768
+        )
+        
+        assert image.url == "https://example.com/image.jpg"
+        assert image.height == 1024
+        assert image.width == 768
+
+    def test_get_item_success(self):
+        """Test successful get_item call"""
+        # Setup mock response
+        mock_item = Mock()
+        mock_item.asin = "B123456789"
+        mock_item.detail_page_url = "https://amazon.de/test"
+        
+        # Mock item info with title
+        mock_title = Mock()
+        mock_title.display_value = "Test Product"
+        mock_item_info = Mock()
+        mock_item_info.title = mock_title
+        mock_item_info.content_rating = None
+        mock_item_info.product_info = None
+        mock_item.item_info = mock_item_info
+        mock_item.offers = None
+
+        # Mock image data
+        mock_large_image = Mock()
+        mock_large_image.url = "https://example.com/image.jpg"
+        mock_large_image.height = 500
+        mock_large_image.width = 400
+
+        mock_primary = Mock()
+        mock_primary.large = mock_large_image
+
+        mock_images = Mock()
+        mock_images.primary = mock_primary
+        mock_item.images = mock_images
+
+        # Mock items result
+        mock_items_result = Mock()
+        mock_items_result.items = [mock_item]
+        
+        # Mock response
+        mock_response = Mock()
+        mock_response.errors = None
+        mock_response.items_result = mock_items_result
+
+        # Setup service with mock client
+        mock_client = Mock(spec=PAAPIClientProtocol)
+        mock_client.get_items.return_value = mock_response
+        
+        config = PAAPIClientConfig(
+            access_key="test", secret_key="test", host="test", 
+            region="test", marketplace="test", partner_tag="test"
+        )
+        service = AmazonPAAPIService(client=mock_client, config=config)
+
+        # Execute
+        result = service.get_item("B123456789")
+
+        # Verify
+        assert result is not None
+        assert result.asin == "B123456789"
+        assert result.title == "Test Product"
+        assert result.detail_page_url == "https://amazon.de/test"
+        assert result.image is not None
+        assert result.image.url == "https://example.com/image.jpg"
+        assert result.image.height == 500
+        assert result.image.width == 400
+        mock_client.get_items.assert_called_once()
+
+    def test_get_item_with_errors(self):
+        """Test get_item when API returns errors"""
+        mock_response = Mock()
+        mock_response.errors = ["API Error"]
+        mock_response.items_result = None
+
+        mock_client = Mock(spec=PAAPIClientProtocol)
+        mock_client.get_items.return_value = mock_response
+        
+        config = PAAPIClientConfig(
+            access_key="test", secret_key="test", host="test",
+            region="test", marketplace="test", partner_tag="test"
+        )
+        service = AmazonPAAPIService(client=mock_client, config=config)
+
+        result = service.get_item("B123456789")
+
+        assert result is None
+        mock_client.get_items.assert_called_once()
+
+    def test_get_item_not_found(self):
+        """Test get_item when item is not found"""
+        mock_response = Mock()
+        mock_response.errors = None
+        mock_response.items_result = None
+
+        mock_client = Mock(spec=PAAPIClientProtocol)
+        mock_client.get_items.return_value = mock_response
+        
+        config = PAAPIClientConfig(
+            access_key="test", secret_key="test", host="test",
+            region="test", marketplace="test", partner_tag="test"
+        )
+        service = AmazonPAAPIService(client=mock_client, config=config)
+
+        result = service.get_item("B123456789")
+
+        assert result is None
+        mock_client.get_items.assert_called_once()
+
+    def test_get_item_empty_result(self):
+        """Test get_item when items_result has no items"""
+        mock_items_result = Mock()
+        mock_items_result.items = []
+        
+        mock_response = Mock()
+        mock_response.errors = None
+        mock_response.items_result = mock_items_result
+
+        mock_client = Mock(spec=PAAPIClientProtocol)
+        mock_client.get_items.return_value = mock_response
+        
+        config = PAAPIClientConfig(
+            access_key="test", secret_key="test", host="test",
+            region="test", marketplace="test", partner_tag="test"
+        )
+        service = AmazonPAAPIService(client=mock_client, config=config)
+
+        result = service.get_item("B123456789")
+
+        assert result is None
+        mock_client.get_items.assert_called_once() 
