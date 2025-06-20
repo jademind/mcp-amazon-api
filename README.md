@@ -3,6 +3,11 @@
 A Model Context Protocol (MCP) service for Amazon Product Advertising API integration. This project
 uses the Python SDK officially provided at [Product Advertising API 5.0](https://webservices.amazon.com/paapi5/documentation/).
 
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mcp-amazon-paapi)
+![PyPI - Version](https://img.shields.io/pypi/v/mcp-amazon-paapi)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/mcp-amazon-paapi)
+
+
 ## Integration in Claude & Cursor
 
 For configuring host, region and markeplace, consult the [Locale Reference for Product Advertising API](https://webservices.amazon.com/paapi5/documentation/locale-reference.html) documentation.
