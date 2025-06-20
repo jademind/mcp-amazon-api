@@ -3,7 +3,32 @@
 A Model Context Protocol (MCP) service for Amazon Product Advertising API integration. This project
 uses the Python SDK officially provided at [Product Advertising API 5.0](https://webservices.amazon.com/paapi5/documentation/).
 
-## Structure
+## Integration in Claude & Cursor
+
+For configuring host, region and markeplace, consult the [Locale Reference for Product Advertising API](https://webservices.amazon.com/paapi5/documentation/locale-reference.html) documentation.
+
+```json
+{
+  "mcpServers": {
+    "amazon-paapi": {
+      "command": "uvx",
+      "args": [
+        "mcp-amazon-paapi"
+      ],
+      "env": {
+        "PAAPI_ACCESS_KEY": "your-access-key",
+        "PAAPI_SECRET_KEY": "your-secret-key",
+        "PAAPI_PARTNER_TAG": "your-partner-tag",
+        "PAAPI_HOST": "webservices.amazon.de",  // select EU or US servers and region
+        "PAAPI_REGION": "eu-west-1",
+        "PAAPI_MARKETPLACE": "www.amazon.de" // set your preferred marketplace
+      }
+    }
+  }
+}
+```
+
+## Project Structure
 
 ```
 mcp-amazon-paapi/
@@ -22,7 +47,7 @@ mcp-amazon-paapi/
 ├── README.md                       # Project documentation
 ```
 
-## Setup
+## Local Setup
 
 ### Initial Setup
 ```bash
@@ -84,29 +109,4 @@ uv run python server.py
 
 # Or if you have activated the virtual environment
 python server.py
-```
-
-## Integration in Claude & Cursor
-
-For configuring host, region and markeplace, consult the [Locale Reference for Product Advertising API](https://webservices.amazon.com/paapi5/documentation/locale-reference.html) documentation.
-
-```json
-{
-  "mcpServers": {
-    "amazon-paapi": {
-      "command": "uvx",
-      "args": [
-        "mcp-amazon-paapi"
-      ],
-      "env": {
-        "PAAPI_ACCESS_KEY": "your-access-key",
-        "PAAPI_SECRET_KEY": "your-secret-key",
-        "PAAPI_PARTNER_TAG": "your-partner-tag",
-        "PAAPI_HOST": "webservices.amazon.de",  // select EU or US servers and region
-        "PAAPI_REGION": "eu-west-1",
-        "PAAPI_MARKETPLACE": "www.amazon.de" // set your preferred marketplace
-      }
-    }
-  }
-}
 ```

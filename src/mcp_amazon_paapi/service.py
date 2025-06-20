@@ -1,5 +1,6 @@
 import os
 import logging
+from enum import StrEnum
 
 from typing import Optional, List, Protocol
 from dataclasses import dataclass
@@ -27,6 +28,18 @@ class SearchItem:
     bying_price: Optional[float] = None
     audience_rating: Optional[str] = None
     is_adult_product: Optional[bool] = None
+
+
+class SearchSort(StrEnum):
+    """
+    The sort order of the search results.
+    """
+    AVG_CUSTOMER_REVIEWS = "AvgCustomerReviews" # Sorts results according to average customer reviews
+    FEATURED = "Featured" # Sorts results with featured items having higher rank
+    NEWEST_ARRIVALS = "NewestArrivals" # Sorts results with according to newest arrivals
+    PRICE_HIGH_TO_LOW = "Price:HighToLow" # Sorts results according to most expensive to least expensive
+    PRICE_LOW_TO_HIGH = "Price:LowToHigh" # Sorts results according to least expensive to most expensive
+    RELEVANCE = "Relevance" # Sorts results with relevant items having higher rank
 
 
 class PAAPIClientProtocol(Protocol):
@@ -101,17 +114,19 @@ class AmazonPAAPIService:
             region=region,
         )
     
-    def search_items(self, search_term: str, category: Optional[str] = None, item_count: Optional[int] = 10) -> List[SearchItem]:
+    def search_items(self, search_term: str, category: Optional[str] = None, item_count: Optional[int] = 10, sort_by: Optional[SearchSort] = None) -> List[SearchItem]:
         """
-        Search for items using the Amazon PA-API 5.0 https://webservices.amazon.com/paapi5/documentation/
-        
+        Search for items using the Amazon PA-API 5.0
+        (https://webservices.amazon.com/paapi5/documentation/)
+
         Args:
-            search_term: The search term to use
-            category: The category to search in
-            item_count: The number of items to return
-            
+            search_term (str): The search term to use.
+            category (Optional[str]): The category (browse node) to search in.
+            item_count (Optional[int]): Maximum number of items to return (default 10).
+            sort_by (Optional[SearchSort]): Sort order of the search results.
+
         Returns:
-            A list of items that match the search criteria
+            List[SearchItem]: Items that match the search criteria.
         """
         search_items_resources = [
             SearchItemsResource.ITEMINFO_TITLE,
@@ -131,6 +146,9 @@ class AmazonPAAPIService:
 
         if category:
             search_items_request.search_index = category
+
+        if sort_by:
+            search_items_request.sort_by = sort_by.value
 
         logger.info(f"Searching for items with request: {search_items_request}")
         response : SearchItemsResponse = self.client.search_items(search_items_request)
